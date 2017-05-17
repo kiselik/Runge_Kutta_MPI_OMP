@@ -1,6 +1,7 @@
 #include <stdio.h> 
 #include <stdlib.h>
 #include <limits>
+#include <omp.h>
 #include <math.h>
 #include "mpi.h" 
 #include <ctime>
@@ -56,15 +57,21 @@ float* vectXmatr(float *Matrix,float step, float *Vector, int row_count,int coun
 	//size- количество элементов в строке
 	int size=count/row_count;
 	float* sResult = new float[row_count];
-	for(int i=0;i<row_count;i++) 
-	{ 
-		float tempSum = 0;
-		for(int j=0;j<size;j++)
-		{
-			tempSum += step * Matrix[i*size+j] * Vector[i];
-		}
-		sResult[i] = tempSum;
-	} 
+	int i = 0, j = 0;
+	float tempSum;
+#pragma omp parallel shared(Matrix, row_count,count, step) private(i, j, tempSum)
+	{
+#pragma omp for 
+		for(i=0;i<row_count;i++) 
+		{ 
+			tempSum = 0;
+			for(j=0;j<size;j++)
+			{
+				tempSum += step * Matrix[i*size+j] * Vector[i];
+			}
+			sResult[i] = tempSum;
+		} 
+	}
 	return sResult;
 	//delete []sResult;
 }
@@ -72,33 +79,93 @@ float* vectXmatr(float *Matrix,float step, float *Vector, int row_count,int coun
 float* vectF(float x,float step, int N)
 {
 	float* sResult = new float[N];
-	for(int i=0;i<N;i++)
+	int i;
+#pragma omp parallel shared(sResult, N) private(i)
 	{
-		sResult[i] = step*x;
+#pragma omp for 
+		for (i = 0; i < N; i++)
+		{
+			sResult[i] = step*x;
+		}
 	}
 	return sResult;
+	delete[]sResult;
 }
 
 float* sumVect(float *V1, float *V2, int N)
 {
-	float* sResult = new float[N];
-	for(int i=0;i<N;i++)
+	float* result = new float[N];
+	int i = 0;
+#pragma omp parallel shared(result, V1, V2) private(i)
 	{
-		sResult[i] = V1[i] + V2[i];
+#pragma omp for 
+		for (i = 0; i < N; i++)
+		{
+			result[i] = V1[i] + V2[i];
+		}
 	}
-	return sResult;
+	return result;
+	delete[] result;
 }
 
 float* get_dy(float *V1, float *V2, float *V3, float *V4, int N)
 {
 	float* sResult = new float[N];
-	for(int i=0;i<N;i++)
+	int i = 0;
+#pragma omp parallel shared(sResult, V1, V2, V3, V4) private(i)
 	{
-		sResult[i] = (V1[i] + 2*V2[i] + 2*V3[i] + V4[i])/6;
+#pragma omp for 
+		for (i = 0; i < N; i++)
+		{
+			sResult[i] = (V1[i] + 2 * V2[i] + 2 * V3[i] + V4[i]) / 6;
+		}
 	}
 	return sResult;
+	delete[] sResult;
 }
 
+float* getKoeff( float coeff,float *Vect, int N)
+{
+	float* sResult = new float[N];
+	int i = 0;
+#pragma omp parallel shared(sResult, N, coeff, Vect) private(i)
+	{
+		for (i = 0; i < N; i++)
+		{
+			sResult[i] = coeff*Vect[i];
+		}
+	}
+	return sResult;
+	delete[]sResult;
+}
+
+float* Runge_kytta(float* A,int size,float start,float finish,float h,float* y_result,int count_flows){
+	float *k1, *k2, *k3, *k4, *dy;
+	k1 = new float[size];
+	k2 = new float[size];
+	k3 = new float[size];
+	k4 = new float[size];
+	dy = new float[size];
+	float x=start;
+	int count=size*size;
+	omp_set_num_threads(count_flows);
+	for (int index=0; x<finish; index++)
+	{         
+		x = start + index*h;
+		k1 = sumVect(vectXmatr(A,h,y_result,size,count), vectF(x,h,size),size);
+		k2 = sumVect(vectXmatr(A,h,sumVect(y_result,getKoeff(0.5, k1,size),size),size,count), vectF(x+h/2,h,size),size);
+		k3 = sumVect(vectXmatr(A,h,sumVect(y_result,getKoeff(0.5, k2, size),size),size,count), vectF(h,x+h/2,size), size);
+		k4 = sumVect(vectXmatr(A,h,sumVect(y_result, k3, size),size,count), vectF(h,x+h,size), size);
+		dy = get_dy(k1,k2,k3,k4,size);
+		y_result = sumVect(y_result, dy,size);
+	}
+	delete [] k1;
+	delete [] k2;
+	delete [] k3;
+	delete [] k4;
+	delete [] dy;
+	return y_result;
+}
 void fill_array(int*a,int size)
 {
 	for(int i=0;i<size;i++)
@@ -110,15 +177,7 @@ void fill_array(float*a,int size)
 		a[i]=0;
 }
 
-float*getKoeff( float coeff,float *Vect, int N)
-{
-	float* sResult = new float[N];
-	for(int i=0;i<N;i++)
-	{
-		sResult[i] = coeff*Vect[i];
-	}
-	return sResult;
-}
+
 
 bool areEqual(float* vectA, float* vectB, int N)
 {
@@ -171,34 +230,22 @@ int main(int argc, char* argv[])
 		finish=2.5;
 		h=0.5;
 		x=start;
-		int count=size*size;
-		float *k1 = new float[size];
-		float *k2 = new float[size];
-		float *k3 = new float[size];
-		float *k4 = new float[size];
-		float *dy = new float[size];
-		double SerialTimeStart = MPI_Wtime(); 
 
-		for (index=0; x<finish; index++)
-		{         
-			x = start + index*h;
-			k1 = sumVect(vectXmatr(A,h,y_result,size,count), vectF(x,h,size),size);
-			k2 = sumVect(vectXmatr(A,h,sumVect(y_result,getKoeff(0.5, k1,size),size),size,count), vectF(x+h/2,h,size),size);
-			k3 = sumVect(vectXmatr(A,h,sumVect(y_result,getKoeff(0.5, k2, size),size),size,count), vectF(h,x+h/2,size), size);
-			k4 = sumVect(vectXmatr(A,h,sumVect(y_result, k3, size),size,count), vectF(h,x+h,size), size);
-			dy = get_dy(k1,k2,k3,k4,size);
-			y_result = sumVect(y_result, dy,size);
-		}
-		double SerialTime = MPI_Wtime() - SerialTimeStart; 
-		printf("\nTime (serial) = %.6f",SerialTime); 
+		double SerialTimeStart_1_Flow = MPI_Wtime(); 
+
+		y_result=Runge_kytta(A,size,start,finish,h,y_result,1);
+		double SerialTime_1_Flow = MPI_Wtime() - SerialTimeStart_1_Flow; 
+		printf("\nTime (serial 1 flow) = %.6f",SerialTime_1_Flow); 
+		printf("\n");
+		double SerialTimeStart_Many_Flow = MPI_Wtime(); 
+		y_result=y_start;
+		y_result=Runge_kytta(A,size,start,finish,h,y_result,4);
+		double SerialTime_Many_Flow = MPI_Wtime() - SerialTimeStart_Many_Flow; 
+		printf("\nTime (serial %d flow) = %.6f",4,SerialTime_Many_Flow); 
 		printf("\n");
 
 		x=start;
-		delete [] k1;
-		delete [] k2;
-		delete [] k3;
-		delete [] k4;
-		delete [] dy;
+
 		ParallelTimeStart=MPI_Wtime();
 	}
 	//parallel v
