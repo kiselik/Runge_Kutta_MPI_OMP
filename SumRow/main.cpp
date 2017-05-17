@@ -133,19 +133,6 @@ bool areEqual(float* vectA, float* vectB, int N)
 	return true;
 }
 
-/*bool isCorrectSolution(float x, float *vect, int N)
-{
-float r = std::numeric_limits<float>::epsilon();
-for(int i=0; i<N; i++)
-{
-if(abs(vect[i] - exp(x)) > r)
-{
-return false;
-}
-}
-return true;
-}*/
-
 int main(int argc, char* argv[]) 
 {
 	int rank, count_process;
@@ -180,18 +167,9 @@ int main(int argc, char* argv[])
 	if ( rank == 0 ) 
 	{ 
 		DataInitialization(A, y_start, size);
-
-		//printf("\nVector y0: \n");
-		//PrintVector(y_start, size);
-		//printf("\nMatrica A: \n");
-		//PrintMatrix(A, size);
-		//serial v
 		start=-2.5;
-		//printf("start=%f",start);
 		finish=2.5;
-		//printf("finish=%f",finish);
 		h=0.5;
-		//printf("h=%f",h);
 		x=start;
 		int count=size*size;
 		float *k1 = new float[size];
@@ -204,24 +182,13 @@ int main(int argc, char* argv[])
 		for (index=0; x<finish; index++)
 		{         
 			x = start + index*h;
-			///k1=vectXmatr(A,h,y_result,size,size*size);
-			//printf("\nvectXmatr from rank=%d",rank);
-			//printf(":\n");
-			//PrintVector(k1, size);
 			k1 = sumVect(vectXmatr(A,h,y_result,size,count), vectF(x,h,size),size);
-			//printf("\nk1 from serial =%d",rank);
-			//printf(":\n");
-			//PrintVector(k1, size);
 			k2 = sumVect(vectXmatr(A,h,sumVect(y_result,getKoeff(0.5, k1,size),size),size,count), vectF(x+h/2,h,size),size);
 			k3 = sumVect(vectXmatr(A,h,sumVect(y_result,getKoeff(0.5, k2, size),size),size,count), vectF(h,x+h/2,size), size);
 			k4 = sumVect(vectXmatr(A,h,sumVect(y_result, k3, size),size,count), vectF(h,x+h,size), size);
 			dy = get_dy(k1,k2,k3,k4,size);
 			y_result = sumVect(y_result, dy,size);
-			//printf("\nVector y_result from rank %d",rank);
-			//printf(":\n");
-			//PrintVector(y_result, size);
 		}
-		//y1 = y_result;
 		double SerialTime = MPI_Wtime() - SerialTimeStart; 
 		printf("\nTime (serial) = %.6f",SerialTime); 
 		printf("\n");
@@ -251,9 +218,7 @@ int main(int argc, char* argv[])
 	else{
 		count_Row_Scatterv= size *size;
 	}
-	//if(rank==0)
 	{
-		//printf("count_process=%d",count_process);
 		send_Counts_Matrix = new int[count_process]; // массив, в котором лежит количество строк, уходящих на каждый процесс 
 		displs_Matrix = new int[count_process];//массив смещений, относительно начала буфера перессылки
 
@@ -266,17 +231,11 @@ int main(int argc, char* argv[])
 		for (int i = 1; i < count_process-1; i++){
 
 			send_Counts_Vector[i]=recvCounts[i] = count_Row_Scatterv;// count of rows which edit every process
-			//printf("recvCounts=%d\n",recvCounts[i] );
 			send_Counts_Matrix[i] = recvCounts[i]*size; // count of elements 
-			//printf("send_Counts_Matrix=%d\n",send_Counts_Matrix[i] );
 		}
 		send_Counts_Matrix[0]=send_Counts_Vector[0]=recvCounts[0]=0;// Нулевой ранг не учавствует в подсчете, поэтому ему отсылаем ноль элементов
-		//printf("send_Counts_Matrix[0]=%d\n",send_Counts_Matrix[0] );
-		//printf("recvCounts[0]=%d\n",recvCounts[0] );
 		send_Counts_Matrix[count_process-1]=  (size- (count_process-2)*count_Row_Scatterv)*size;// количество элементов, которые достанутся последнему процессу(для матриц неровно делящихся на количество процессов
-		//printf("send_Counts_Matrix[count_process-1]:=%d\n",send_Counts_Matrix[count_process-1]);
 		send_Counts_Vector[count_process-1]=recvCounts[count_process-1]= size- (count_process-2)*count_Row_Scatterv;// количество строк, которые достанутся последнему процессу(для матриц неровно делящихся на количество процессов
-		//printf("recvCounts[count_process-1]:=%d\n",recvCounts[count_process-1]);
 
 		fill_array(displs_Matrix,count_process);// занулили
 		fill_array(recvdispls,count_process);// занулили
@@ -285,11 +244,8 @@ int main(int argc, char* argv[])
 		for (int i = 2; i < count_process; i++){
 
 			displs_Matrix[i]+=send_Counts_Matrix[i-1]+displs_Matrix[i-1]; // в зависимости от процесса берем разное смещение, зависящее от предыдущих смещений
-			//printf("displs_Matrix[i]Counts=%d\n",displs_Matrix[i]);
 			recvdispls[i]+= recvCounts[i-1]+recvdispls[i-1];
 			displs_Vector[i]+=recvCounts[i-1]+recvdispls[i-1];
-			//printf("recvdispls[%d]Counts=%d\n",i, recvdispls[i]);
-			//printf("displs_Vector[i]Counts=%d\n",displs_Vector[i]);
 		}
 
 
@@ -311,46 +267,17 @@ int main(int argc, char* argv[])
 		float *k4 = new float[tmp_size];
 		float *dy = new float[tmp_size];
 
-		//printf("displs_Matrix[%d]=%d",rank,displs_Matrix[rank]);
-		//printf("displs_Vector[%d]=%d",rank,displs_Vector[rank]);
-
 		fill_array(tmp,recvCounts[rank]);
-		//printf("x=%f",x);
-		//printf("\nvector");
-		//printf(":\n");
-		//PrintVector(vector, send_Counts_Vector[rank]);
-
-		//printf("\nVector y_result");
-		//printf(":\n");
-		//PrintVector(y_result, size);
-		//printf("\nmatrix in rank=%d",rank);
-		//PrintVector(matrix,send_Counts_Matrix[rank]);
-
 
 		for (index=0; x<finish; index++)
 		{         
 			x = start + index*h;
-			//printf("x=%f ",x);
-
-			//k1=vectXmatr(matrix,h,vector,send_Counts_Vector[rank],send_Counts_Matrix[rank]);
-			//printf("\nVectF from rank=%d",rank);
-			//printf(":\n");
-			//PrintVector(k1, send_Counts_Vector[rank]);
 			k1 = sumVect(vectXmatr(matrix,h,vector,send_Counts_Vector[rank],send_Counts_Matrix[rank]), vectF(x,h,send_Counts_Vector[rank]),send_Counts_Vector[rank]);
-			//printf("\nk1 from rank=%d",rank);
-			//printf(":\n");
-			///PrintVector(k1, send_Counts_Vector[rank]);
 			k2 = sumVect(vectXmatr(matrix,h,sumVect(vector,getKoeff(0.5, k1,send_Counts_Vector[rank]),send_Counts_Vector[rank]),send_Counts_Vector[rank],send_Counts_Matrix[rank]), vectF(x+h/2,h,send_Counts_Vector[rank]),send_Counts_Vector[rank]);
-			//printf("\nk2 from rank=%d", rank);
-			//printf(":\n");
-			//PrintVector(k2, send_Counts_Vector[rank]);
 			k3 = sumVect(vectXmatr(matrix,h,sumVect(vector,getKoeff(0.5, k2,send_Counts_Vector[rank]), send_Counts_Vector[rank]),send_Counts_Vector[rank],send_Counts_Matrix[rank]), vectF(h,x+h/2,send_Counts_Vector[rank]), send_Counts_Vector[rank]);
 			k4 = sumVect(vectXmatr(matrix,h,sumVect(vector, k3, send_Counts_Vector[rank]),send_Counts_Vector[rank],send_Counts_Matrix[rank]), vectF(h,x+h,send_Counts_Vector[rank]), send_Counts_Vector[rank]);
 			dy = get_dy(k1,k2,k3,k4,send_Counts_Vector[rank]);
 			vector = sumVect(vector, dy,send_Counts_Vector[rank]);
-			//printf("\nVector vector from rank %d",rank);
-			//printf(":\n");
-			//PrintVector(vector,send_Counts_Vector[rank] );
 		}
 
 		delete [] k1;
@@ -359,26 +286,15 @@ int main(int argc, char* argv[])
 		delete [] k4;
 		delete [] dy;
 
-		//for (int i = displs_Vector[rank]; i < displs_Vector[rank]+send_Counts_Vector[rank]; i ++)
-		//{
 		for (int j = 0; j < send_Counts_Vector[rank]; j++)
 		{
 			tmp[j]=vector[j];
-			//printf("VECTOR[%d]  %f FROM RANK=%d\n", j,vector[j],rank);
-			//printf("TMP[%d]=%f \n", displs_Vector[rank]+j,tmp[displs_Vector[rank]+j]);
 		}
-		//}
-		//printf("\nVector tmp from rank %d",rank);
-		//printf(":\n");
-		//PrintVector(tmp,recvCounts[rank] );
-
 	}
 	delete [] vector;
 	delete [] matrix;
 	MPI_Barrier(MPI_COMM_WORLD);
 	fill_array(y_result2,size);
-	//printf("vector \"y_result\"\n");
-	//PrintVector(y_result2,size);
 
 	// шлем результат из буфера tmp, размер которого=количеству обработанных строк, зависит от ранга, элементы типа float
 	//шлем в буфер result2
@@ -387,15 +303,15 @@ int main(int argc, char* argv[])
 	if(rank==0)
 	{
 		double ParallelTime = MPI_Wtime() - ParallelTimeStart; 
-		printf("\nTime (parallel) = %.6f",ParallelTime); 
-		printf("\nVector y0: \n");
-		PrintVector(y_result, size);
-		printf("\nVector y_result2: \n");
-		PrintVector(y_result2, size);
+		printf("\nTime (parallel) = %.6f",ParallelTime);
+		if(size<=10){
+			printf("\nVector y0: \n");
+			PrintVector(y_result, size);
+			printf("\nVector y_result2: \n");
+			PrintVector(y_result2, size);
+		}
 		if(areEqual(y_result, y_result2, size)) printf("\n\nResults are equal");
 		else printf("\n\nResults are NOT equal!");
-
-		/**/
 	}
 	delete [] send_Counts_Matrix;
 	delete [] displs_Matrix;
